@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,14 +24,28 @@ class HybridRecommendationService:
         self,
         subset_size: int = 1000,
         random_state: int = 42,
+        input_artifact_prefix: str | None = None,
         artifact_prefix: str | None = None,
+        svd_weight: float = 0.70,
+        agentic_weight: float = 0.25,
+        diversity_weight: float = 0.05,
         allow_overwrite: bool | None = None,
     ) -> dict[str, object]:
+        weights = {
+            "svd_weight": float(svd_weight),
+            "agentic_weight": float(agentic_weight),
+            "diversity_weight": float(diversity_weight),
+        }
+        if min(weights.values()) < 0:
+            raise ValueError("Hybrid weights must be non-negative.")
+        if not math.isclose(sum(weights.values()), 1.0, abs_tol=1e-9):
+            raise ValueError("Hybrid weights must sum to 1.00.")
+
         processed = self.cf_service._load_processed_interactions_with_articles()
         subset_rows = json.loads(
             self.settings.evaluation_base_table_svd_top10_json_path(
                 subset_size,
-                artifact_prefix=artifact_prefix,
+                artifact_prefix=input_artifact_prefix,
             ).read_text(encoding="utf-8")
         )
         metadata = self.cf_service._formal_article_metadata(processed)
@@ -65,6 +80,9 @@ class HybridRecommendationService:
                 item_index=item_index,
                 user_factors=user_factors,
                 item_factors=item_factors,
+                svd_weight=weights["svd_weight"],
+                agentic_weight=weights["agentic_weight"],
+                diversity_weight=weights["diversity_weight"],
             )
             results.append(result)
             if int(result["recommendation_count"]) > 0:
@@ -141,6 +159,11 @@ class HybridRecommendationService:
             )
             if results
             else 0.0,
+            "input_artifact_prefix": input_artifact_prefix,
+            "artifact_prefix": artifact_prefix,
+            "svd_weight": weights["svd_weight"],
+            "agentic_weight": weights["agentic_weight"],
+            "diversity_weight": weights["diversity_weight"],
             "example_hybrid_recommendation_users": example_hybrid_recommendation_users,
             "example_hybrid_failure_users": example_hybrid_failure_users,
         }
@@ -160,6 +183,9 @@ class HybridRecommendationService:
         item_index: dict[str, int],
         user_factors: np.ndarray,
         item_factors: np.ndarray,
+        svd_weight: float,
+        agentic_weight: float,
+        diversity_weight: float,
     ) -> dict[str, object]:
         customer_id = normalize_customer_id(row["customer_id"])
         ground_truth_article_id = normalize_article_id(row["ground_truth_article_id"])
@@ -223,9 +249,9 @@ class HybridRecommendationService:
                 )
                 missing_metadata_for_diversity_count += missing_count
                 hybrid_score = (
-                    0.70 * normalized_svd_scores.get(article_id, 0.0)
-                    + 0.25 * normalized_agentic_scores.get(article_id, 0.0)
-                    + 0.05 * diversity_bonus
+                    svd_weight * normalized_svd_scores.get(article_id, 0.0)
+                    + agentic_weight * normalized_agentic_scores.get(article_id, 0.0)
+                    + diversity_weight * diversity_bonus
                 )
                 scored_candidates.append(
                     {
