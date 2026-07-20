@@ -28,7 +28,7 @@ RANDOM_STATE = 42
 
 # This must identify the already-saved frozen input from the original run.
 # Do not call DataService.build_* methods in this experiment.
-SOURCE_PREFIX = "first_1000_users"
+SOURCE_PREFIX: str | None = None
 
 # Every new file created by this experiment must begin with this prefix.
 RUN_PREFIX = "hybrid_weight_ablation_first1000_v1"
