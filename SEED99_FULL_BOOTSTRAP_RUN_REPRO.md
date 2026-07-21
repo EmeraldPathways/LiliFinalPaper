@@ -83,3 +83,17 @@ Formal run writes saved artefacts to `backend/app/data/processed/`. Expected key
 A full list of Seed99 artefacts can be found at:
 
 `SECOND_1000_USER_FILES.md`
+
+## Bootstrap Confidence Interval Procedure
+
+The bootstrap confidence interval logic is implemented in `backend/app/services/evaluation_service.py`. For the three-method Seed99 comparison, the procedure is:
+
+1. Read the saved per-user SVD, standalone 3-Agent, and Hybrid recommendation results.
+2. Compute per-user values for `HitRate@10`, `NDCG@10`, and `ILD@10`.
+3. Draw 1,000 bootstrap resamples with replacement from the full set of per-user rows.
+4. For each resample, compute method-level mean metrics for SVD, standalone 3-Agent, and Hybrid, plus pairwise differences for Hybrid minus SVD and Hybrid minus standalone 3-Agent.
+5. Estimate the 95% confidence interval using the empirical 2.5th and 97.5th percentiles.
+
+The Seed99 run uses `bootstrap_samples=1000` and `random_seed=42` in the evaluation stage. The resulting report is saved as:
+
+`backend/app/data/processed/seed99_robustness_bootstrap_ci_report_top10_1000_three_methods.json`
